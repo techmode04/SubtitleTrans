@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SubtitleForge — AI SRT Translator</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { gray: { 850: '#1f2937', 950: '#0a0a0a' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0a0a0a; color: #f3f4f6; overflow-x: hidden; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .hidden-tab { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500/30">
+
+    <header class="border-b border-gray-800 bg-gray-950 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-900/20">
+                <i data-lucide="file-text" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent tracking-tight">
+                SubtitleForge
+            </h1>
+        </div>
+        <nav class="flex gap-1 bg-gray-900 p-1 rounded-lg border border-gray-800 overflow-x-auto">
+            <button onclick="switchTab('translator')" id="nav-translator" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all bg-gray-800 text-white shadow-sm whitespace-nowrap">
+                <i data-lucide="languages" class="w-4 h-4"></i> Translator
+            </button>
+            <button onclick="switchTab('history')" id="nav-history" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 whitespace-nowrap">
+                <i data-lucide="history" class="w-4 h-4"></i> History
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 whitespace-nowrap">
+                <i data-lucide="settings" class="w-4 h-4"></i> Settings
+            </button>
+            <button onclick="switchTab('deployment')" id="nav-deployment" class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 whitespace-nowrap">
+                <i data-lucide="code" class="w-4 h-4"></i> Deployment
+            </button>
+        </nav>
+    </header>
+
+    <main class="p-4 md:p-6 flex-grow relative">
+        
+        <div id="tab-translator" class="max-w-7xl mx-auto space-y-8 fade-in block">
+            <div class="text-center space-y-3 py-4 md:py-6">
+                <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Translate Your Subtitles with AI</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto text-sm md:text-lg">Upload an SRT, select your languages, and get perfectly synchronized translations in seconds.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                <!-- LEFT COLUMN: Controls -->
+                <div class="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
+                    
+                    <!-- Upload Zone -->
+                    <div id="drop-zone" class="border-2 border-dashed rounded-xl p-6 text-center transition-all border-gray-700 bg-gray-900/50 hover:border-gray-500">
+                        <div id="upload-empty" class="space-y-4 flex flex-col items-center py-2">
+                            <div class="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center">
+                                <i data-lucide="upload-cloud" class="w-7 h-7 text-gray-400"></i>
+                            </div>
+                            <p class="text-sm font-medium text-gray-300">Drop your .SRT file here</p>
+                            <input type="file" accept=".srt" id="file-upload" class="hidden" />
+                            <label for="file-upload" class="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg cursor-pointer transition-colors">
+                                Browse Files
+                            </label>
+                            <div class="flex flex-wrap justify-center gap-3 mt-4 text-[10px] md:text-xs text-gray-500">
+                                <span class="flex items-center gap-1"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> SRT supported</span>
+                                <span class="flex items-center gap-1"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> Timestamps preserved</span>
+                            </div>
+                        </div>
+                        
+                        <div id="upload-filled" class="hidden space-y-3 text-left">
+                            <div class="flex items-center gap-3">
+                                <i data-lucide="file-text" class="w-8 h-8 text-indigo-400 shrink-0"></i>
+                                <div class="overflow-hidden">
+                                    <p id="file-name-display" class="text-sm font-medium text-white truncate"></p>
+                                    <p id="file-meta-display" class="text-xs text-gray-400"></p>
+                                </div>
+                            </div>
+                            <button onclick="removeFile()" class="text-xs text-red-400 hover:text-red-300 mt-2">Remove file</button>
+                        </div>
+                    </div>
+
+                    <!-- Detection UI -->
+                    <div id="detection-container" class="hidden bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                                <i data-lucide="globe" class="w-4 h-4 text-indigo-400"></i> Source Language
+                            </h3>
+                            <button id="btn-change-source" onclick="showManualSourceSelection()" class="hidden text-xs text-gray-400 hover:text-white flex items-center gap-1 bg-gray-800 px-2 py-1 rounded">
+                                <i data-lucide="edit-2" class="w-3 h-3"></i> Change
+                            </button>
+                        </div>
+
+                        <div id="detecting-ui" class="hidden flex items-center gap-3 p-3 bg-gray-950 rounded-lg border border-gray-800">
+                            <i data-lucide="loader-2" class="w-5 h-5 text-indigo-500 animate-spin"></i>
+                            <div class="text-sm text-gray-300">Analyzing sample...</div>
+                        </div>
+
+                        <div id="detection-result-ui" class="hidden"></div>
+                        <div id="manual-source-ui" class="hidden space-y-3 p-3 bg-gray-950 rounded-lg border border-gray-800 fade-in"></div>
+                    </div>
+
+                    <!-- Target Languages Selection -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col h-[400px]">
+                        <h3 class="text-sm font-semibold text-white flex items-center gap-2 mb-4">
+                            <i data-lucide="languages" class="w-4 h-4 text-indigo-400"></i> Translate To
+                        </h3>
+                        <div class="relative mb-3">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-500"></i>
+                            <input type="text" id="lang-search" placeholder="Search languages..." class="w-full bg-gray-950 border border-gray-800 rounded-lg pl-9 pr-4 py-2 text-sm text-white outline-none focus:border-indigo-500" onkeyup="renderLanguages()"/>
+                        </div>
+
+                        <div id="language-list" class="flex-grow overflow-y-auto pr-2 custom-scrollbar space-y-1"></div>
+                        
+                        <div id="hinglish-warning" class="hidden mt-3 p-2 bg-indigo-900/20 border border-indigo-500/20 rounded-lg flex items-start gap-2 mb-3">
+                            <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0"></i>
+                            <p class="text-[10px] text-indigo-200">Hinglish uses an optimized 2-step pipeline for natural conversational quality.</p>
+                        </div>
+
+                        <div class="pt-3 mt-auto border-t border-gray-800 flex flex-col gap-3">
+                            <div class="flex items-center justify-between">
+                                <span id="selected-count" class="text-xs text-gray-400">0 selected</span>
+                                <button onclick="clearSelectedLanguages()" id="clear-langs-btn" class="hidden text-xs text-gray-500 hover:text-white">Clear</button>
+                            </div>
+                            <button id="btn-translate" onclick="toggleTranslation()" disabled class="w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-gray-800 text-gray-500 cursor-not-allowed">
+                                <i data-lucide="play-circle" class="w-4 h-4"></i> Translate Subtitles
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: Dashboard -->
+                <div class="lg:col-span-8 space-y-6">
+                    <div id="dashboard-empty" class="h-[600px] border border-gray-800 bg-gray-900/30 rounded-xl flex flex-col items-center justify-center text-center p-8">
+                        <div class="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-4">
+                            <i data-lucide="play" class="w-6 h-6 text-gray-500"></i>
+                        </div>
+                        <h3 class="text-lg font-medium text-gray-300">Ready to Build</h3>
+                        <p class="text-sm text-gray-500 mt-2 max-w-sm">Upload a file and select target languages to begin high-speed batch translation.</p>
+                    </div>
+
+                    <div id="dashboard-active" class="hidden space-y-6 fade-in">
+                        <!-- Progress Area -->
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                            <div class="flex flex-wrap items-center justify-between mb-6 border-b border-gray-800 pb-4 gap-4">
+                                <h3 class="text-lg font-semibold text-white">Translation Dashboard</h3>
+                                <div class="flex gap-2" id="dashboard-controls">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                            <div id="jobs-container" class="space-y-4">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Preview Area -->
+                        <div id="preview-container" class="hidden bg-gray-900 border border-gray-800 rounded-xl p-6 fade-in">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                                    <i data-lucide="eye" class="w-4 h-4 text-indigo-400"></i> Preview: <span id="preview-lang-name"></span>
+                                </h3>
+                                <button onclick="closePreview()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+                            </div>
+                            <div class="border border-gray-800 rounded-lg overflow-hidden bg-gray-950">
+                                <div class="max-h-[400px] overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-left text-sm">
+                                        <thead class="bg-gray-900 sticky top-0 border-b border-gray-800">
+                                            <tr>
+                                                <th class="p-3 text-xs font-medium text-gray-400 w-12">No.</th>
+                                                <th class="p-3 text-xs font-medium text-gray-400 w-32 hidden md:table-cell">Time</th>
+                                                <th class="p-3 text-xs font-medium text-gray-400 w-[40%]">Original</th>
+                                                <th class="p-3 text-xs font-medium text-gray-400 w-[40%]">Translation</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="preview-tbody" class="divide-y divide-gray-800"></tbody>
+                                    </table>
+                                    <div id="preview-limit-msg" class="hidden p-3 text-center text-[10px] text-gray-500 bg-gray-900 border-t border-gray-800">
+                                        Showing first 100 subtitles only for performance. Download to view all.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div id="tab-settings" class="max-w-4xl mx-auto space-y-6 fade-in hidden-tab py-6">
+            <div class="flex items-center gap-2 mb-6 border-b border-gray-800 pb-4">
+                <i data-lucide="settings" class="w-6 h-6 text-indigo-400"></i>
+                <h2 class="text-2xl font-bold text-white">Application Settings</h2>
+            </div>
+            
+            <div class="bg-indigo-950/30 border border-indigo-900/50 rounded-xl p-6 mb-6">
+                 <h3 class="text-sm font-semibold text-indigo-300 mb-3">API Configuration</h3>
+                 <label class="block text-xs text-gray-400 mb-1">Gemini API Key (Optional in Canvas)</label>
+                 <input type="password" id="setting-apikey" placeholder="AIzaSy..." onchange="updateSettings('apiKey', this.value)" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-sm text-white outline-none focus:border-indigo-500" />
+                 <p class="text-[10px] text-gray-500 mt-2">Stored locally. If left blank, the environment may attempt to auto-inject the key.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
+                    <h3 class="text-lg font-semibold text-white border-b border-gray-800 pb-2">Translation Rules</h3>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Translation Style</label>
+                        <select id="setting-style" onchange="updateSettings('style', this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-sm text-white outline-none">
+                            <option value="Natural">Natural</option>
+                            <option value="Literal">Literal</option>
+                            <option value="Cinematic">Cinematic</option>
+                            <option value="Professional">Professional</option>
+                            <option value="Casual">Casual</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Batch Size (<span id="batch-val">50</span>)</label>
+                        <input type="range" id="setting-batch" min="20" max="100" step="10" value="50" oninput="updateSettings('batchSize', parseInt(this.value)); document.getElementById('batch-val').innerText = this.value;" class="w-full accent-indigo-500" />
+                        <p class="text-[10px] text-gray-500 mt-1">Larger batches reduce API calls but take longer per request.</p>
+                    </div>
+                    <div class="space-y-2 pt-2 border-t border-gray-800">
+                        <label class="flex items-center gap-3 cursor-pointer group"><input type="checkbox" id="set-names" onchange="updateSettings('preserveNames', this.checked)" class="accent-indigo-500 w-4 h-4 rounded" checked /><span class="text-sm text-gray-300">Preserve speaker names</span></label>
+                        <label class="flex items-center gap-3 cursor-pointer group"><input type="checkbox" id="set-format" onchange="updateSettings('preserveFormatting', this.checked)" class="accent-indigo-500 w-4 h-4 rounded" checked /><span class="text-sm text-gray-300">Preserve formatting tags (<i>, <b>)</span></label>
+                        <label class="flex items-center gap-3 cursor-pointer group"><input type="checkbox" id="set-concise" onchange="updateSettings('concise', this.checked)" class="accent-indigo-500 w-4 h-4 rounded" checked /><span class="text-sm text-gray-300">Keep subtitle lines concise</span></label>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
+                    <h3 class="text-lg font-semibold text-white border-b border-gray-800 pb-2">File Generation</h3>
+                    <div class="space-y-3">
+                        <label class="block text-sm text-gray-400 mb-1">Default Filename Format</label>
+                        <label class="flex items-center gap-3 p-3 bg-gray-950 rounded-lg border border-gray-800 cursor-pointer">
+                            <input type="radio" name="filenameFormat" value="languageOnly" onchange="updateSettings('filenameFormat', this.value)" class="accent-indigo-500 w-4 h-4" checked />
+                            <div><div class="text-sm text-gray-200">Language only</div><div class="text-xs text-gray-500 font-mono mt-0.5">e.g., hindi.srt</div></div>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 bg-gray-950 rounded-lg border border-gray-800 cursor-pointer">
+                            <input type="radio" name="filenameFormat" value="originalPlusLanguage" onchange="updateSettings('filenameFormat', this.value)" class="accent-indigo-500 w-4 h-4" />
+                            <div><div class="text-sm text-gray-200">Original filename + Language</div><div className="text-xs text-gray-500 font-mono mt-0.5">e.g., movie_hindi.srt</div></div>
+                        </label>
+                    </div>
+                    <label class="flex items-center gap-3 cursor-pointer group pt-2 border-t border-gray-800">
+                        <input type="checkbox" id="set-zip" onchange="updateSettings('zipEnabled', this.checked)" class="accent-indigo-500 w-4 h-4 rounded" checked />
+                        <span class="text-sm text-gray-300">Enable ZIP download for multiple files</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center space-y-2 mt-8">
+                <h3 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">SubtitleForge</h3>
+                <p class="text-sm text-gray-400">AI-powered multi-language subtitle translator optimized for performance.</p>
+                <div class="pt-4 mt-4 border-t border-gray-800 inline-block px-8">
+                    <p class="text-sm font-medium text-gray-300">Developed by <span class="text-white">Sachin Dhisle</span></p>
+                    <p class="text-xs text-gray-500 mt-1">Version: 2.0.0 (Production Optimized)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORY TAB -->
+        <div id="tab-history" class="max-w-4xl mx-auto space-y-6 fade-in hidden-tab py-6">
+            <div class="flex items-center justify-between mb-6 border-b border-gray-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2"><i data-lucide="history" class="w-6 h-6 text-indigo-400"></i> Translation History</h2>
+                <button onclick="clearHistory()" id="btn-clear-history" class="hidden text-xs text-red-400 hover:text-red-300 flex items-center gap-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear</button>
+            </div>
+            <div id="history-container" class="space-y-3"></div>
+            <div id="history-empty" class="text-center py-16 border border-gray-800 border-dashed rounded-xl bg-gray-900/30">
+                <i data-lucide="history" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i>
+                <p class="text-gray-400">No history found. Translated files metadata appears here.</p>
+            </div>
+        </div>
+
+        <!-- DEPLOYMENT TAB -->
+        <div id="tab-deployment" class="max-w-4xl mx-auto space-y-6 fade-in hidden-tab py-6">
+            <div class="flex items-center mb-6 border-b border-gray-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2"><i data-lucide="code" class="w-6 h-6 text-indigo-400"></i> GitHub Deployment Guide</h2>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 text-sm text-gray-300 space-y-6">
+                <p>To deploy <strong>SubtitleForge</strong> to GitHub and host securely on Vercel or Netlify, follow these steps.</p>
+                <div>
+                    <h4 class="text-white font-medium mb-2">1. Project Structure</h4>
+                    <pre class="bg-gray-950 p-4 rounded-lg border border-gray-800 font-mono text-xs overflow-x-auto text-indigo-200">SubtitleForge/
+├── src/
+│   ├── index.html          (This exact file)
+├── api/                    (Serverless Functions)
+│   └── translate.js
+├── .env.example
+├── .gitignore
+├── package.json
+└── README.md</pre>
+                </div>
+                <div>
+                    <h4 class="text-white font-medium mb-2">2. Secure Backend Setup (Crucial)</h4>
+                    <p class="text-xs text-gray-400 mb-2">Never expose <code>GEMINI_API_KEY</code> in frontend code on public repos. In production, change the <code>fetch()</code> URL in this code to point to your secure backend endpoint:</p>
+                    <pre class="bg-gray-950 p-4 rounded-lg border border-gray-800 font-mono text-xs overflow-x-auto text-orange-200">// Change this line in the JS logic:
+// const apiUrl = `https://generativelanguage.googleapis.com/...`;
+const apiUrl = `/api/translate`; // Calls your Serverless Function</pre>
+                </div>
+                <div>
+                    <h4 class="text-white font-medium mb-2">3. .env.example</h4>
+                    <pre class="bg-gray-950 p-4 rounded-lg border border-gray-800 font-mono text-xs text-gray-300">GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE</pre>
+                </div>
+                <div>
+                    <h4 class="text-white font-medium mb-2">4. README.md Template</h4>
+                    <pre class="bg-gray-950 p-4 rounded-lg border border-gray-800 font-mono text-xs text-gray-300 overflow-y-auto max-h-40"># SubtitleForge — AI SRT Translator
+
+SubtitleForge is a high-performance, browser-first tool designed to translate .srt files into multiple languages concurrently using AI.
+
+## Features
+- **Fast Batch Processing:** Caches successful batches to save API calls.
+- **Concurrent Translation:** Translates up to 3 languages simultaneously.
+- **Hinglish Optimization:** Specialized 2-step pipeline for natural Roman Hindi.
+- **Local Generation:** All SRT and ZIP files are generated locally.
+
+## Developer
+Developed by **Sachin Dhisle**
+
+## Security
+For production deployment, ensure the Gemini API calls are routed through a secure serverless function.</pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="text-center py-6 text-xs text-gray-500 mt-auto border-t border-gray-800/50 bg-gray-950">
+        © 2026 Sachin Dhisle · SubtitleForge
+    </footer>
+
+    <!-- Toasts Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        const SUPPORTED_LANGUAGES = [
+            'English', 'Hindi', 'Hinglish (Roman Hindi)', 'Marathi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam',
+            'Bengali', 'Gujarati', 'Punjabi', 'Urdu', 'Odia', 'Assamese', 'French', 'Spanish', 'German', 
+            'Italian', 'Portuguese', 'Russian', 'Arabic', 'Japanese', 'Korean', 'Chinese', 'Indonesian', 
+            'Vietnamese', 'Turkish'
+        ];
+        const CONCURRENCY_LIMIT = 3;
+        const MAX_RETRIES = 3;
+
+        // --- Core State ---
+        let appState = {
+            file: null, fileName: '', parsedSubs: [],
+            sourceLanguage: 'Auto Detect', detectionStatus: null, isDetecting: false, isSourceConfirmed: false,
+            selectedLanguages: [],
+            jobs: {}, // { 'Hindi': { status: 'pending|translating|paused|complete|error', progress: 0, subs: [], errorMsg: '', subStatus: '' } }
+            isTranslating: false, isPaused: false,
+            settings: { style: 'Natural', preserveNames: true, preserveFormatting: true, concise: true, filenameFormat: 'languageOnly', zipEnabled: true, batchSize: 50, apiKey: '' },
+            history: [], previewLanguage: null
+        };
+
+        // Cache persists across pauses/resumes: { 'Hindi': { 0: [...subs], 1: [...] } }
+        const translationCache = {}; 
+        let currentAbortController = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            loadHistory();
+            renderLanguages();
+            
+            // File Upload Listeners
+            document.getElementById('file-upload').addEventListener('change', (e) => handleFile(e.target.files[0]));
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-500', 'bg-indigo-500/10'); });
+            dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-indigo-500', 'bg-indigo-500/10'); });
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('border-indigo-500', 'bg-indigo-500/10'); handleFile(e.dataTransfer.files[0]); });
+        });
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const id = Date.now();
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-lg shadow-xl border flex items-center gap-3 animate-in fade-in slide-in-from-right text-sm font-medium ${type === 'error' ? 'bg-red-950/90 border-red-900/50 text-red-200' : type === 'success' ? 'bg-green-950/90 border-green-900/50 text-green-200' : 'bg-gray-800 border-gray-700 text-white'}`;
+            toast.innerHTML = `<i data-lucide="${type === 'error' ? 'alert-circle' : 'check'}" class="w-4 h-4"></i> ${message}`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+        }
+
+        function switchTab(tabId) {
+            ['translator', 'history', 'settings', 'deployment'].forEach(id => {
+                const btn = document.getElementById(`nav-${id}`);
+                const tabEl = document.getElementById(`tab-${id}`);
+                if (id === tabId) {
+                    btn.className = "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all bg-gray-800 text-white shadow-sm whitespace-nowrap";
+                    tabEl.classList.remove('hidden-tab');
+                } else {
+                    btn.className = "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all text-gray-400 hover:text-gray-200 hover:bg-gray-800/50 whitespace-nowrap";
+                    tabEl.classList.add('hidden-tab');
+                }
+            });
+            lucide.createIcons();
+        }
+
+        // --- STREAMING_CHUNK:SRT Parsing & Utils... ---
+        function handleFile(file) {
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.srt')) return showToast("Please upload a valid .srt file.", "error");
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const subs = parseSRT(e.target.result);
+                if (subs.length > 0) {
+                    appState.file = file; appState.fileName = file.name; appState.parsedSubs = subs;
+                    appState.jobs = {}; appState.isTranslating = false; appState.isPaused = false;
+                    appState.detectionStatus = null; appState.isSourceConfirmed = false;
+                    
+                    // Clear Cache for new file
+                    for (let key in translationCache) delete translationCache[key];
+
+                    updateUploadUI(); updateDashboardUI();
+                    showToast(`Parsed ${subs.length} subtitles.`, "success");
+                    detectLanguage(subs);
+                } else {
+                    showToast("Invalid SRT format.", "error");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseSRT(srtString) {
+            const normalized = srtString.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const blocks = normalized.trim().split(/\n{2,}/);
+            return blocks.map((block) => {
+                const lines = block.split('\n');
+                if (lines.length >= 3) {
+                    const id = lines[0].trim();
+                    const timestampLine = lines[1];
+                    const text = lines.slice(2).join('\n');
+                    if (timestampLine.includes('-->')) {
+                        const [start, end] = timestampLine.split('-->').map(s => s.trim());
+                        return { id, start, end, text, originalText: text };
+                    }
+                }
+                return null;
+            }).filter(Boolean);
+        }
+
+        function generateSRT(subtitles) {
+            return subtitles.map(sub => `${sub.id}\n${sub.start} --> ${sub.end}\n${sub.text}`).join('\n\n');
+        }
+
+        function getFilename(lang) {
+            const cleanLang = lang.replace(/\s*\(.*?\)\s*/g, '').toLowerCase().trim();
+            if (appState.settings.filenameFormat === 'originalPlusLanguage' && appState.fileName) {
+                const baseName = appState.fileName.replace(/\.srt$/i, '');
+                return `${baseName}_${cleanLang}.srt`;
+            }
+            return `${cleanLang}.srt`;
+        }
+
+        // --- STREAMING_CHUNK:Intelligent Auto-Detection... ---
+        async function detectLanguage(subs) {
+            appState.isDetecting = true; updateDetectionUI(); updateTranslateButton();
+            try {
+                // Fast Sampling: First 10, Mid 10, Last 10
+                let samples = [];
+                if (subs.length <= 30) samples = subs.map(s => s.text);
+                else {
+                    const mid = Math.floor(subs.length / 2);
+                    samples = [...subs.slice(0, 10), ...subs.slice(mid - 5, mid + 5), ...subs.slice(-10)].map(s => s.text);
+                }
+
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: "Analyze subtitles:\n" + JSON.stringify(samples) }] }],
+                    systemInstruction: { parts: [{ text: "Analyze subtitle text to detect source language. Return ONLY JSON. Identify standard (e.g., 'English'), Romanized (e.g., 'Hinglish'), or Mixed." }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                primaryLanguage: { type: "STRING" }, confidence: { type: "INTEGER" },
+                                languageType: { type: "STRING" }, isMixed: { type: "BOOLEAN" },
+                                mixedBreakdown: { type: "ARRAY", items: { type: "OBJECT", properties: { language: { type: "STRING" }, percentage: { type: "INTEGER" } } } }
+                            }, required: ["primaryLanguage", "confidence", "languageType"]
+                        }
+                    }
+                };
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${appState.settings.apiKey}`;
+                const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error("API Error");
+                
+                const result = await res.json();
+                const detection = JSON.parse(result?.candidates?.[0]?.content?.parts?.[0]?.text);
+                
+                appState.detectionStatus = detection;
+                appState.sourceLanguage = detection.isMixed ? 'Mixed Language' : detection.primaryLanguage;
+                appState.isSourceConfirmed = detection.confidence >= 80;
+                
+            } catch (error) {
+                console.error(error);
+                showToast("Detection failed. Please select manually.", "error");
+                showManualSourceSelection();
+            } finally {
+                appState.isDetecting = false; updateDetectionUI(); updateTranslateButton();
+            }
+        }
+
+        // --- STREAMING_CHUNK:Gemini Translation Engine... ---
+        async function apiTranslateBatch(batch, targetLang, attempt, signal) {
+            if (signal?.aborted) throw new Error("Cancelled");
+            try {
+                const payloadData = batch.map(sub => ({ id: sub.id, text: sub.text }));
+                const prompt = `You are a professional subtitle translator. Translate from ${appState.sourceLanguage} to ${targetLang}.
+Rules:
+- Style: ${appState.settings.style}.
+${appState.settings.preserveNames ? '- Preserve names/brands.' : ''}
+${appState.settings.preserveFormatting ? '- Preserve formatting tags.' : ''}
+${appState.settings.concise ? '- Keep concise.' : ''}
+- NEVER modify IDs. Return exact JSON structure.`;
+
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: JSON.stringify(payloadData) }] }],
+                    systemInstruction: { parts: [{ text: prompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, text: { type: "STRING" } }, required: ["id", "text"] } }
+                    }
+                };
+
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${appState.settings.apiKey}`, 
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
+                
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const translated = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+                
+                return batch.map(orig => {
+                    const t = translated.find(x => x.id === orig.id);
+                    return { ...orig, text: t ? t.text : orig.text };
+                });
+            } catch (e) {
+                if (e.name === 'AbortError' || e.message === 'Cancelled') throw e;
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 1000 * attempt)); // Backoff
+                    return apiTranslateBatch(batch, targetLang, attempt + 1, signal);
+                }
+                throw e;
+            }
+        }
+
+        async function apiConvertToHinglish(hindiBatch, originalBatch, attempt, signal) {
+            if (signal?.aborted) throw new Error("Cancelled");
+            try {
+                const payloadData = hindiBatch.map(sub => ({ id: sub.id, text: sub.text }));
+                const prompt = `Convert conversational Hindi subtitles to Hinglish (Roman/Latin alphabet).
+Rules:
+- ONLY Roman/Latin alphabet. NO Devanagari.
+- Preserve natural conversational tone. Do NOT translate to English.
+- Return exact JSON structure.`;
+
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: JSON.stringify(payloadData) }] }],
+                    systemInstruction: { parts: [{ text: prompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, text: { type: "STRING" } }, required: ["id", "text"] } }
+                    }
+                };
+
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${appState.settings.apiKey}`, 
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
+                
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const translated = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text);
+                
+                // Strict Hinglish Validation
+                if (/[\u0900-\u097F]/.test(JSON.stringify(translated))) throw new Error("Devanagari detected in Hinglish");
+
+                return originalBatch.map(orig => {
+                    const t = translated.find(x => x.id === orig.id);
+                    return { ...orig, text: t ? t.text : orig.text };
+                });
+            } catch (e) {
+                if (e.name === 'AbortError' || e.message === 'Cancelled') throw e;
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 1000 * attempt));
+                    return apiConvertToHinglish(hindiBatch, originalBatch, attempt + 1, signal);
+                }
+                throw e;
+            }
+        }
+
+        // --- STREAMING_CHUNK:Concurrency & Execution... ---
+        async function runTranslationEngine() {
+            appState.isTranslating = true; appState.isPaused = false; updateTranslateButton(); updateDashboardUI();
+            
+            currentAbortController = new AbortController();
+            const signal = currentAbortController.signal;
+            
+            // Generate Batches
+            const batches = [];
+            for (let i = 0; i < appState.parsedSubs.length; i += appState.settings.batchSize) {
+                batches.push(appState.parsedSubs.slice(i, i + appState.settings.batchSize));
+            }
+
+            // Init Jobs
+            appState.selectedLanguages.forEach(lang => {
+                if (!appState.jobs[lang] || appState.jobs[lang].status === 'error') {
+                    appState.jobs[lang] = { status: 'pending', progress: 0, subs: [], errorMsg: '', subStatus: '' };
+                } else if (appState.jobs[lang].status === 'paused') {
+                    appState.jobs[lang].status = 'pending';
+                }
+            });
+            updateDashboardUI();
+
+            const pendingLangs = appState.selectedLanguages.filter(l => appState.jobs[l].status !== 'complete');
+            
+            // Concurrency Worker Function
+            let langIndex = 0;
+            async function worker() {
+                while (langIndex < pendingLangs.length) {
+                    if (signal.aborted) break;
+                    const lang = pendingLangs[langIndex++];
+                    
+                    appState.jobs[lang].status = 'translating'; updateDashboardUI();
+                    if (!translationCache[lang]) translationCache[lang] = {};
+                    
+                    let allSubs = [];
+                    try {
+                        for (let i = 0; i < batches.length; i++) {
+                            if (signal.aborted) throw new Error("Cancelled");
+                            
+                            if (translationCache[lang][i]) {
+                                allSubs.push(...translationCache[lang][i]);
+                                appState.jobs[lang].progress = Math.round(((i + 1) / batches.length) * 100);
+                                updateDashboardUI();
+                                continue;
+                            }
+
+                            appState.jobs[lang].subStatus = `Batch ${i+1}/${batches.length}`; updateDashboardUI();
+                            
+                            let finalBatch = [];
+                            if (lang === 'Hinglish (Roman Hindi)') {
+                                let hindiBatch;
+                                if (translationCache['Hindi'] && translationCache['Hindi'][i]) {
+                                    hindiBatch = translationCache['Hindi'][i];
+                                } else {
+                                    appState.jobs[lang].subStatus = `Step 1: Hindi (Batch ${i+1})`; updateDashboardUI();
+                                    hindiBatch = await apiTranslateBatch(batches[i], 'Hindi', 1, signal);
+                                    if (!translationCache['Hindi']) translationCache['Hindi'] = {};
+                                    translationCache['Hindi'][i] = hindiBatch;
+                                }
+                                appState.jobs[lang].subStatus = `Step 2: Hinglish (Batch ${i+1})`; updateDashboardUI();
+                                finalBatch = await apiConvertToHinglish(hindiBatch, batches[i], 1, signal);
+                            } else {
+                                finalBatch = await apiTranslateBatch(batches[i], lang, 1, signal);
+                            }
+
+                            translationCache[lang][i] = finalBatch;
+                            allSubs.push(...finalBatch);
+                            appState.jobs[lang].progress = Math.round(((i + 1) / batches.length) * 100);
+                            updateDashboardUI();
+                        }
+
+                        // Final Validation
+                        if (allSubs.length === appState.parsedSubs.length) {
+                            appState.jobs[lang] = { status: 'complete', progress: 100, subs: allSubs, errorMsg: '', subStatus: '' };
+                            showToast(`${lang} complete.`, "success");
+                        } else {
+                            throw new Error("Validation Failed: Subtitle count mismatch.");
+                        }
+
+                    } catch (e) {
+                        if (e.message === "Cancelled" || e.name === "AbortError") {
+                            appState.jobs[lang].status = 'paused';
+                        } else {
+                            console.error(e);
+                            appState.jobs[lang].status = 'error';
+                            appState.jobs[lang].errorMsg = `Failed at batch. Retrying supported.`;
+                        }
+                    }
+                    updateDashboardUI();
+                }
+            }
+
+            // Run workers
+            const workers = [];
+            for (let i = 0; i < CONCURRENCY_LIMIT; i++) workers.push(worker());
+            await Promise.all(workers);
+
+            appState.isTranslating = false;
+            updateTranslateButton();
+            updateDashboardUI();
+            
+            if (!signal.aborted) saveHistory();
+        }
+
+        // --- STREAMING_CHUNK:UI Controllers... ---
+        function toggleTranslation() {
+            if (appState.isTranslating) {
+                if (currentAbortController) currentAbortController.abort();
+                appState.isTranslating = false; appState.isPaused = true;
+                showToast("Translation paused.", "info");
+                updateTranslateButton(); updateDashboardUI();
+            } else {
+                runTranslationEngine();
+            }
+        }
+
+        function removeFile() {
+            appState.file = null; appState.parsedSubs = []; appState.jobs = {};
+            for (let key in translationCache) delete translationCache[key];
+            updateUploadUI(); updateDetectionUI(); updateDashboardUI(); updateTranslateButton();
+        }
+
+        function updateUploadUI() {
+            const empty = document.getElementById('upload-empty'); const filled = document.getElementById('upload-filled');
+            const drop = document.getElementById('drop-zone');
+            if (appState.file) {
+                empty.classList.add('hidden'); filled.classList.remove('hidden');
+                drop.classList.add('border-indigo-500', 'bg-indigo-500/10'); drop.classList.remove('border-gray-700', 'bg-gray-900/50');
+                document.getElementById('file-name-display').innerText = appState.fileName;
+                document.getElementById('file-meta-display').innerText = `${appState.parsedSubs.length} subtitles • ${appState.parsedSubs.length > 0 ? appState.parsedSubs[appState.parsedSubs.length-1].end.split(',')[0] : '00:00:00'}`;
+            } else {
+                empty.classList.remove('hidden'); filled.classList.add('hidden');
+                drop.classList.remove('border-indigo-500', 'bg-indigo-500/10'); drop.classList.add('border-gray-700', 'bg-gray-900/50');
+            }
+        }
+
+        function updateDetectionUI() {
+            const cont = document.getElementById('detection-container');
+            const detect = document.getElementById('detecting-ui');
+            const result = document.getElementById('detection-result-ui');
+            const manual = document.getElementById('manual-source-ui');
+            const btn = document.getElementById('btn-change-source');
+            
+            if (!appState.file) { cont.classList.add('hidden'); return; }
+            cont.classList.remove('hidden'); detect.classList.add('hidden'); result.classList.add('hidden'); manual.classList.add('hidden'); btn.classList.add('hidden');
+
+            if (appState.isDetecting) {
+                detect.classList.remove('hidden');
+            } else if (document.getElementById('manual-source-ui').classList.contains('active-manual')) {
+                manual.classList.remove('hidden');
+            } else if (appState.detectionStatus) {
+                btn.classList.remove('hidden'); result.classList.remove('hidden');
+                
+                const d = appState.detectionStatus;
+                let html = '';
+                if (d.confidence < 80 && !appState.isSourceConfirmed) {
+                    html = `<div class="p-3 bg-orange-950/20 border border-orange-900/50 rounded-lg space-y-3">
+                        <div class="flex items-start gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-orange-500 mt-0.5"></i><div><p class="text-sm font-medium text-orange-200">Uncertain Detection</p><p class="text-xs text-orange-300/70">Detected: ${d.primaryLanguage} (${d.confidence}%)</p></div></div>
+                        <div class="flex gap-2"><button onclick="appState.isSourceConfirmed=true; updateDetectionUI(); updateTranslateButton();" class="flex-1 py-1.5 text-xs rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">Confirm</button><button onclick="showManualSourceSelection()" class="flex-1 py-1.5 text-xs rounded bg-gray-900 text-gray-400 border border-gray-700">Change</button></div>
+                    </div>`;
+                } else {
+                    let mixStr = '';
+                    if (d.isMixed && d.mixedBreakdown) {
+                        mixStr = `<div class="mt-2 pt-2 border-t border-gray-800 text-[10px] space-y-1"><span class="text-gray-400 font-semibold">Breakdown:</span>${d.mixedBreakdown.map(m => `<div class="flex justify-between"><span class="text-gray-500">${m.language}</span><span class="text-gray-600">${m.percentage}%</span></div>`).join('')}</div>`;
+                    }
+                    html = `<div class="p-3 bg-gray-950 border border-gray-800 rounded-lg">
+                        <div class="flex justify-between items-center"><span class="text-base font-medium text-white">${appState.sourceLanguage}</span><span class="text-xs px-2 py-0.5 bg-green-500/10 text-green-400 rounded border border-green-500/20">${d.confidence}% Sure</span></div>
+                        <p class="text-[10px] text-gray-500 mt-1">Type: ${d.languageType}</p>
+                        ${mixStr}
+                    </div>`;
+                }
+                result.innerHTML = html; lucide.createIcons();
+            }
+        }
+
+        function showManualSourceSelection() {
+            const man = document.getElementById('manual-source-ui');
+            man.classList.add('active-manual');
+            
+            let opts = `<option value="Auto Detect" disabled>Select Language...</option>`;
+            SUPPORTED_LANGUAGES.forEach(l => opts += `<option value="${l}" ${appState.sourceLanguage === l ? 'selected' : ''}>${l}</option>`);
+            opts += `<option value="Mixed Language" ${appState.sourceLanguage === 'Mixed Language' ? 'selected' : ''}>Mixed Language</option>`;
+            
+            man.innerHTML = `<select onchange="appState.sourceLanguage=this.value; appState.isSourceConfirmed=true; document.getElementById('manual-source-ui').classList.remove('active-manual'); updateDetectionUI(); updateTranslateButton();" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-white outline-none focus:border-indigo-500">${opts}</select>`;
+            updateDetectionUI();
+        }
+
+        function renderLanguages() {
+            const list = document.getElementById('language-list');
+            const query = (document.getElementById('lang-search')?.value || '').toLowerCase();
+            
+            let html = '';
+            SUPPORTED_LANGUAGES.filter(l => l.toLowerCase().includes(query)).forEach(lang => {
+                const isSel = appState.selectedLanguages.includes(lang);
+                html += `<label class="flex items-center gap-3 p-2 hover:bg-gray-800 rounded-lg cursor-pointer group">
+                    <div class="w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSel ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600 group-hover:border-gray-400'}">
+                        ${isSel ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+                    </div>
+                    <span class="text-sm text-gray-300">${lang}</span>
+                    <input type="checkbox" class="hidden" ${isSel ? 'checked' : ''} onchange="toggleLanguage('${lang}', this.checked)" />
+                </label>`;
+            });
+            list.innerHTML = html; lucide.createIcons();
+            
+            document.getElementById('selected-count').innerText = `${appState.selectedLanguages.length} selected`;
+            document.getElementById('clear-langs-btn').className = appState.selectedLanguages.length > 0 ? "text-xs text-gray-500 hover:text-white" : "hidden";
+            document.getElementById('hinglish-warning').className = appState.selectedLanguages.includes('Hinglish (Roman Hindi)') ? "mt-3 p-2 bg-indigo-900/20 border border-indigo-500/20 rounded-lg flex items-start gap-2 mb-3 fade-in" : "hidden";
+            updateTranslateButton();
+        }
+
+        function toggleLanguage(lang, checked) {
+            if (checked && !appState.selectedLanguages.includes(lang)) appState.selectedLanguages.push(lang);
+            else if (!checked) appState.selectedLanguages = appState.selectedLanguages.filter(l => l !== lang);
+            renderLanguages();
+        }
+        function clearSelectedLanguages() { appState.selectedLanguages = []; renderLanguages(); }
+
+        function updateTranslateButton() {
+            const btn = document.getElementById('btn-translate');
+            const can = appState.file && appState.selectedLanguages.length > 0 && !appState.isDetecting && appState.isSourceConfirmed;
+            
+            if (!can) {
+                btn.disabled = true; btn.className = "w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-gray-800 text-gray-500 cursor-not-allowed";
+                btn.innerHTML = `<i data-lucide="play-circle" class="w-4 h-4"></i> Translate Subtitles`;
+            } else if (appState.isTranslating) {
+                btn.disabled = false; btn.className = "w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/30 text-orange-400 shadow-sm";
+                btn.innerHTML = `<i data-lucide="pause-circle" class="w-4 h-4"></i> Pause Translation`;
+            } else {
+                btn.disabled = false; btn.className = "w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-all bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20";
+                btn.innerHTML = `<i data-lucide="${appState.isPaused ? 'play' : 'play-circle'}" class="w-4 h-4"></i> ${appState.isPaused ? 'Resume Translation' : 'Translate Subtitles'}`;
+            }
+            lucide.createIcons();
+        }
+
+        // --- STREAMING_CHUNK:Dashboard & Output... ---
+        function updateDashboardUI() {
+            const empty = document.getElementById('dashboard-empty'); const active = document.getElementById('dashboard-active');
+            const cont = document.getElementById('jobs-container'); const ctrls = document.getElementById('dashboard-controls');
+            
+            if (Object.keys(appState.jobs).length === 0) { empty.classList.remove('hidden'); active.classList.add('hidden'); return; }
+            empty.classList.add('hidden'); active.classList.remove('hidden');
+            
+            let anyComplete = false; let html = '';
+            
+            appState.selectedLanguages.forEach(lang => {
+                const job = appState.jobs[lang] || { status: 'pending', progress: 0 };
+                if (job.status === 'complete') anyComplete = true;
+                
+                let badge = '', pColor = 'bg-indigo-500';
+                if (job.status === 'complete') { badge = `<span class="px-2 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20">Complete ✓</span>`; pColor = 'bg-green-500'; }
+                else if (job.status === 'translating') { badge = `<span class="px-2 py-0.5 rounded text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse">Translating</span>`; }
+                else if (job.status === 'paused') { badge = `<span class="px-2 py-0.5 rounded text-[10px] bg-orange-500/10 text-orange-400 border border-orange-500/20">Paused</span>`; pColor = 'bg-orange-500'; }
+                else if (job.status === 'error') { badge = `<span class="px-2 py-0.5 rounded text-[10px] bg-red-500/10 text-red-400 border border-red-500/20">Failed</span>`; pColor = 'bg-red-500'; }
+                else { badge = `<span class="px-2 py-0.5 rounded text-[10px] bg-gray-800 text-gray-500">Waiting</span>`; }
+
+                html += `<div class="bg-gray-950 border border-gray-800 rounded-lg p-4">
+                    <div class="flex flex-wrap justify-between items-center mb-2 gap-2">
+                        <div class="flex items-center gap-3"><span class="font-medium text-gray-200 text-sm">${lang}</span>${badge}</div>
+                        ${job.status === 'complete' ? `
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500 font-mono hidden md:block mr-2">${getFilename(lang)}</span>
+                                <button onclick="previewLanguage('${lang}')" class="px-2 py-1 text-xs rounded border transition-colors ${appState.previewLanguage === lang ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white'}">Preview</button>
+                                <button onclick="downloadSingle('${lang}')" class="px-2 py-1 text-xs bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white rounded flex items-center gap-1"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download</button>
+                            </div>
+                        ` : `<span class="text-xs text-gray-400 font-mono">${job.progress}%</span>`}
+                    </div>
+                    <div class="h-1 w-full bg-gray-800 rounded-full overflow-hidden"><div class="h-full transition-all duration-300 ${pColor}" style="width: ${job.progress}%"></div></div>
+                    ${(job.subStatus || job.errorMsg) ? `<div class="flex justify-between items-center mt-2"><span class="text-[10px] text-gray-500 italic">${job.subStatus||''}</span><span class="text-[10px] text-red-400">${job.errorMsg||''}</span></div>` : ''}
+                </div>`;
+            });
+            cont.innerHTML = html;
+
+            ctrls.innerHTML = (anyComplete && appState.settings.zipEnabled && !appState.isTranslating) ? `<button onclick="downloadAllZipped()" class="text-xs flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-md"><i data-lucide="file-archive" class="w-3.5 h-3.5"></i> Download ZIP</button>` : '';
+            lucide.createIcons(); renderPreview();
+        }
+
+        function downloadSingle(lang) {
+            const job = appState.jobs[lang];
+            if (!job || job.status !== 'complete') return;
+            const content = generateSRT(job.subs);
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = getFilename(lang);
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        async function downloadAllZipped() {
+            try {
+                if (!window.JSZip) return showToast("JSZip library not loaded.", "error");
+                const zip = new window.JSZip();
+                let added = 0;
+                Object.entries(appState.jobs).forEach(([lang, job]) => {
+                    if (job.status === 'complete') { zip.file(getFilename(lang), generateSRT(job.subs)); added++; }
+                });
+                if (added === 0) return showToast("No valid translations.", "error");
+                const content = await zip.generateAsync({ type: 'blob' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(content); a.download = 'translations.zip';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                showToast("ZIP downloaded.", "success");
+            } catch (e) { showToast("ZIP creation failed.", "error"); }
+        }
+
+        function previewLanguage(lang) { appState.previewLanguage = (appState.previewLanguage === lang) ? null : lang; updateDashboardUI(); }
+        function closePreview() { appState.previewLanguage = null; updateDashboardUI(); }
+
+        function renderPreview() {
+            const cont = document.getElementById('preview-container'); const tbody = document.getElementById('preview-tbody');
+            if (!appState.previewLanguage || appState.jobs[appState.previewLanguage]?.status !== 'complete') { cont.classList.add('hidden'); return; }
+            cont.classList.remove('hidden'); document.getElementById('preview-lang-name').innerText = appState.previewLanguage;
+            
+            const subs = appState.jobs[appState.previewLanguage].subs.slice(0, 100);
+            tbody.innerHTML = subs.map(s => `<tr class="hover:bg-gray-800/30 transition-colors"><td class="p-3 text-gray-500">${s.id}</td><td class="p-3 text-[10px] text-gray-500 font-mono hidden md:table-cell leading-tight">${s.start}<br/><span class="opacity-50">↓</span><br/>${s.end}</td><td class="p-3 text-gray-300 whitespace-pre-wrap">${s.originalText}</td><td class="p-3 text-indigo-200 whitespace-pre-wrap">${s.text}</td></tr>`).join('');
+            document.getElementById('preview-limit-msg').className = appState.jobs[appState.previewLanguage].subs.length > 100 ? "p-3 text-center text-[10px] text-gray-500 bg-gray-900 border-t border-gray-800" : "hidden";
+        }
+
+        // --- STREAMING_CHUNK:Settings & History... ---
+        function updateSettings(k, v) { appState.settings[k] = v; }
+        
+        function saveHistory() {
+            const rec = { id: Date.now(), file: appState.fileName, date: new Date().toISOString(), langs: appState.selectedLanguages, count: appState.parsedSubs.length };
+            appState.history = [rec, ...appState.history].slice(0, 50);
+            localStorage.setItem('sf_hist', JSON.stringify(appState.history));
+            renderHistoryUI();
+        }
+        function loadHistory() {
+            try { const h = localStorage.getItem('sf_hist'); if(h) appState.history = JSON.parse(h); } catch(e){}
+            renderHistoryUI();
+        }
+        function clearHistory() { appState.history = []; localStorage.removeItem('sf_hist'); renderHistoryUI(); }
+        
+        function renderHistoryUI() {
+            const cont = document.getElementById('history-container'); const empty = document.getElementById('history-empty');
+            const btn = document.getElementById('btn-clear-history');
+            if (appState.history.length === 0) { cont.innerHTML = ''; empty.classList.remove('hidden'); btn.classList.add('hidden'); return; }
+            empty.classList.add('hidden'); btn.classList.remove('hidden');
+            cont.innerHTML = appState.history.map(r => `<div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between"><div class="flex items-start gap-4"><div class="p-2 bg-gray-800 rounded-lg"><i data-lucide="file-text" class="w-5 h-5 text-indigo-400"></i></div><div><h4 class="text-sm font-medium text-white">${r.file}</h4><div class="text-xs text-gray-500 flex gap-2 mt-1"><span>${new Date(r.date).toLocaleString()}</span><span>•</span><span>${r.count} lines</span></div><div class="flex flex-wrap gap-1 mt-2">${r.langs.map(l => `<span class="px-1.5 py-0.5 rounded text-[10px] bg-gray-800 text-gray-300 border border-gray-700">${l}</span>`).join('')}</div></div></div></div>`).join('');
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
